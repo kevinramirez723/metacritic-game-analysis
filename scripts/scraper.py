@@ -1,18 +1,18 @@
 from bs4 import BeautifulSoup, SoupStrainer
 import cchardet
 import lxml
-import numpy as np
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter, Retry
+from time import sleep
 from typing_extensions import TypedDict
 
 class GameData(TypedDict):
     title: list[str]
     platform: list[str]
     release_date: list[str]
-    metascore: list[int]
-    userscore: list[float]
+    metascore: list[str]
+    userscore: list[str]
     genres: list[list[str]]
     critics: list[dict[str, int]]
 
@@ -96,16 +96,24 @@ def scrape_critic_scores(
         game_url: Url for a specific game's main page.
     """
     SUFFIX = "/critic-reviews"
-    SELECT_CRITERIA = "div.review_critic div.source, div.review_grade"
+    SELECT_CRITERIA = "div.review_critic, div.review_grade"
     critic_pg = session.get(game_url + SUFFIX)
     body = SoupStrainer("div", class_="body product_reviews")
     critic_html = BeautifulSoup(critic_pg.content, "lxml", parse_only=body)
-    critic_html = critic_html.select_one("ol.reviews.critic_reviews")
-    critic_info = critic_html.select(SELECT_CRITERIA)
+    critic_cells = critic_html.select_one("ol.reviews.critic_reviews")
+    critic_info = critic_cells.select(SELECT_CRITERIA)
     score_dict = {}
-    for critic in (paired := iter(critic_info)):
-        score = int(next(paired).get_text())
-        score_dict[critic.get_text()] = score
+    for i, critic_data in enumerate(critic_info):
+        match i % 2:
+            case 0:
+                name = critic_data.select_one("div.source")
+                if name is not None:
+                    critic = name.get_text()
+                else:
+                    critic = ""
+            case 1:
+                score = int(critic_data.get_text())
+                score_dict[critic] = score
     data_dict["critics"].append(score_dict)
 
 def store_metacritic_data() -> None:
@@ -122,20 +130,34 @@ def store_metacritic_data() -> None:
     )
     session = requests.Session()
     session.headers = {"User-Agent": "Edge"}
-    retries = Retry(total=5, backoff_factor=1)
-    session.mount('http://', HTTPAdapter(max_retries=retries))
+    retries = Retry(total=5, backoff_factor=10, status_forcelist=[404, 429])
+    session.mount('https://', HTTPAdapter(max_retries=retries))
     pg_num = 0
     while True:
-        game_urls = scrape_general_info(session, data_dict, pg_num)
-        if not game_urls:
-            break
-        for url in game_urls:
-            scrape_genres_and_date(session, data_dict, url)
-            scrape_critic_scores(session, data_dict, url)
-        pg_num += 1
+        try:
+            game_urls = scrape_general_info(session, data_dict, pg_num)
+            if not game_urls:
+                break
+            for url in game_urls:
+                scrape_genres_and_date(session, data_dict, url)
+                sleep(.5)
+                scrape_critic_scores(session, data_dict, url)
+                sleep(.5)
+            print(f"Page {pg_num} processed...")
+            sleep(.5)
+            pg_num += 1
+        except Exception as e:
+            df = pd.DataFrame.from_dict(data_dict, orient='index').T
+            rm_dups = lambda x: list(pd.unique(x)) if x is not None else None
+            df["genres"] = df["genres"].apply(rm_dups)
+            df.to_csv("../data/raw.csv", sep='|', index=False, quoting=3)
+            print("Early exit, something went wrong during operation.\n")
+            print(getattr(e, 'message', repr(e)))
+            exit(1)
     df = pd.DataFrame(data_dict)
     df["genres"] = df["genres"].apply(lambda x: list(pd.unique(x)))
-    df.to_csv("../data/raw.csv", sep='|', index=False)
+    df.to_csv("../data/raw.csv", sep='|', index=False, quoting=3)
+    print("Successfully exported data.")
 
 if __name__ == "__main__":
     store_metacritic_data()
