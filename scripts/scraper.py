@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup, SoupStrainer
-import cchardet
-import lxml
+import cchardet  # Improves parsing speed
+import lxml  # Replaces default parser
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -75,6 +75,10 @@ def scrape_genres_and_date(
         game_url: Url for a specific game's main page.
     """
     game_pg = session.get(game_url)
+    if game_pg.status_code == 404:  # Catches few cases where page is broken.
+        data_dict["genres"].append([])
+        data_dict["release_date"].append("")
+        return
     body = SoupStrainer("div", class_="left")
     game_html = BeautifulSoup(game_pg.content, "lxml", parse_only=body)
     genre_info = game_html.select("li.summary_detail.product_genre .data")
@@ -98,6 +102,9 @@ def scrape_critic_scores(
     SUFFIX = "/critic-reviews"
     SELECT_CRITERIA = "div.review_critic, div.review_grade"
     critic_pg = session.get(game_url + SUFFIX)
+    if critic_pg.status_code == 404:  # Catches few cases where page is broken.
+        data_dict["critics"].append({})
+        return
     body = SoupStrainer("div", class_="body product_reviews")
     critic_html = BeautifulSoup(critic_pg.content, "lxml", parse_only=body)
     critic_cells = critic_html.select_one("ol.reviews.critic_reviews")
@@ -110,7 +117,7 @@ def scrape_critic_scores(
                 if name is not None:
                     critic = name.get_text()
                 else:
-                    critic = ""
+                    critic = ""  # At least one instance of blank critic name.
             case 1:
                 score = int(critic_data.get_text())
                 score_dict[critic] = score
@@ -118,7 +125,16 @@ def scrape_critic_scores(
 
 def store_metacritic_data() -> None:
     """Executes all scrape subroutines and exports unrefined results to csv.
+
+    Current implementation stalls over time due to site limiting requests.
+    Attempts at proxies via session.proxies or requests-ip-rotator still
+    thwarted and further attempts of circumventing are beyond my current 
+    skillset/time restriction. In the ideal non-rate limited scenario one
+    should expect script to complete in <6 hours. If successful rapid
+    request methods are found in the future I hope to multithread current
+    scraper implementation.
     """
+    DELAY = 5  # Assists with rate limiting in conjuction with Retry.
     data_dict = GameData(
         title=[],
         platform=[],
@@ -130,29 +146,35 @@ def store_metacritic_data() -> None:
     )
     session = requests.Session()
     session.headers = {"User-Agent": "Edge"}
-    retries = Retry(total=5, backoff_factor=10, status_forcelist=[404, 429])
-    session.mount('https://', HTTPAdapter(max_retries=retries))
+    retries = Retry(total=5, backoff_factor=10, status_forcelist=[429])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
     pg_num = 0
     while True:
         try:
             game_urls = scrape_general_info(session, data_dict, pg_num)
             if not game_urls:
                 break
-            for url in game_urls:
+            for i, url in enumerate(game_urls):
                 scrape_genres_and_date(session, data_dict, url)
-                sleep(.5)
+                sleep(DELAY)
                 scrape_critic_scores(session, data_dict, url)
-                sleep(.5)
+                sleep(DELAY)
+                print(f"    Game {i} complete.")
+            sleep(DELAY)
             print(f"Page {pg_num} processed...")
-            sleep(.5)
             pg_num += 1
         except Exception as e:
-            df = pd.DataFrame.from_dict(data_dict, orient='index').T
+            # If data scraping is halted mid-progress one can continue
+            # adding to previous csv by excising malformed chunk then
+            # adjusting starting pg_num and setting to_csv to 'a' mode
+            # with header=False. This must be done manually for the time
+            # being, but could be automated.
+            df = pd.DataFrame.from_dict(data_dict, orient="index").T
             rm_dups = lambda x: list(pd.unique(x)) if x is not None else None
             df["genres"] = df["genres"].apply(rm_dups)
             df.to_csv("../data/raw.csv", sep='|', index=False, quoting=3)
-            print("Early exit, something went wrong during operation.\n")
-            print(getattr(e, 'message', repr(e)))
+            print("\nEarly exit, something went wrong during operation:")
+            print(getattr(e, "message", repr(e)))
             exit(1)
     df = pd.DataFrame(data_dict)
     df["genres"] = df["genres"].apply(lambda x: list(pd.unique(x)))
