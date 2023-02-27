@@ -46,7 +46,6 @@ The final data set is of the form:
 </tbody>
 </table>
 
-All required modules for scraping, cleaning, and analyzing can be installed with `pip install -r requirements.txt` followed by 
-`pip install -r requirements.in`.
+All required modules for scraping, cleaning, and analyzing can be installed with `pip install -r requirements.txt`.
 
 Subsequent report based on data findings is stored in analysis_results folder along with any figures generated from analysis.ipynb and other misc. resources used.
