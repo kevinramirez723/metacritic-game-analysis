@@ -1,3 +1,6 @@
+# SCRAPER CURRENTLY OUT OF DATE DUE TO UX REDESIGN ON METACRITIC
+# SUBSEQUENT REVISION OF PROJECT PLANNED
+
 # Metacritic Game Analysis
 This is an exploratory data analysis done on various statistics derived from metacritic with an emphasis on genres and individual critic scoring.
 Data set was gathered via [scraper.py](https://github.com/kevinramirez723/metacritic-game-analysis/blob/main/scripts/scraper.py) of my own design which stores a [raw.csv](https://github.com/kevinramirez723/metacritic-game-analysis/blob/main/data/raw.csv).
