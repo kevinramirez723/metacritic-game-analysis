@@ -37,6 +37,10 @@ soupsieve==2.5
 stack-data==0.6.3
 tornado==6.3.3
 traitlets==5.13.0
+types-beautifulsoup4==4.12.0.7
+types-html5lib==1.1.11.15
+types-lxml==2023.10.21
+typing_extensions==4.8.0
 tzdata==2023.3
 urllib3==2.1.0
 wcwidth==0.2.10
