@@ -7,13 +7,21 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"mechatroner.rainbow-csv",
-				"oderwat.indent-rainbow",
+				"ms-python.python",
+				"ms-toolsai.jupyter",
 				"ms-python.black-formatter",
-				"ms-toolsai.jupyter"
+				"ms-python.isort",
+				"oderwat.indent-rainbow",
+				"mechatroner.rainbow-csv"
 			],
 			"settings": {
-				"editor.defaultFormatter": "ms-python.black-formatter"
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"editor.defaultFormatter": "ms-python.black-formatter",
+				"python.analysis.diagnosticSeverityOverrides": {
+					"reportUnusedImport": "warning",
+					"reportPrivateUsage": "none"
+				},
+				"isort.args":["--profile", "black"]
 			}
 		}
 	},
